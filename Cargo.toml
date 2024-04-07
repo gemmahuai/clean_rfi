@@ -15,8 +15,7 @@ roaring = "0.10"
 sigproc_filterbank = "0.4"
 
 [dependencies.pulp]
-version = "*"                              # Use version from faer as the constraint
-git = "https://github.com/kiranshila/pulp"
+version = "*"        # Use version from faer as the constraint
 features = ["macro"]
 
 [profile.dev.package.faer]

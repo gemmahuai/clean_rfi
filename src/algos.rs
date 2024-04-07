@@ -1,3 +1,5 @@
+use std::f32::NAN;
+
 use crate::math::*;
 use faer::{
     prelude::*,
@@ -23,7 +25,7 @@ pub fn detrend_columns_inplace(mut data_view: MatMut<'_, f32>, order: usize) {
     }
 }
 
-/// Detrend variation across rows
+/// Detrend variation across rows.
 pub fn detrend_rows_inplace(mut data_view: MatMut<'_, f32>, order: usize) {
     let n_cols = data_view.ncols();
     let n_rows = data_view.nrows();
@@ -42,9 +44,26 @@ pub fn detrend_rows_inplace(mut data_view: MatMut<'_, f32>, order: usize) {
     }
 }
 
+/// Mask off channels just given their channel number
+pub fn dumb_mask(mut data_view: MatMut<'_, f32>, channels: &[usize]) {
+    // Channels are columns here (column-major)
+    let nans = Col::<f32>::from_fn(data_view.nrows(), |_| NAN);
+    for channel in channels {
+        let mut col = data_view.rb_mut().col_mut(*channel);
+        zipped!(nans.as_ref(), col).for_each(|unzipped!(n, mut c)| *c = *n);
+    }
+}
+
 /// Clean a block of time/freq data, used in every IO operation
 /// This is the top-level cleaning function
 pub fn clean_block(mut data_view: MatMut<'_, f32>) {
+    // Start with a dump mask of the top and bottom frequency channels
+    // Those are full of nonsense all the time
+    let mut bad_channels = vec![];
+    bad_channels.append(&mut (0..=250).collect());
+    bad_channels.append(&mut (1797..=2047).collect());
+    dumb_mask(data_view.rb_mut(), &bad_channels);
+
     // Remove variation across frequencies
     detrend_rows_inplace(data_view.rb_mut(), 4);
     // Then remove variation across time

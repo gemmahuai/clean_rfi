@@ -325,7 +325,7 @@ dependencies = [
  "memmap2",
  "nohash-hasher",
  "psrdada",
- "pulp 0.18.9 (git+https://github.com/kiranshila/pulp)",
+ "pulp",
  "rand",
  "rayon",
  "roaring",
@@ -579,7 +579,7 @@ dependencies = [
  "libm",
  "num-complex",
  "num-traits",
- "pulp 0.18.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pulp",
  "reborrow",
 ]
 
@@ -646,7 +646,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "paste",
- "pulp 0.18.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pulp",
  "raw-cpuid",
  "rayon",
  "seq-macro",
@@ -1180,17 +1180,6 @@ dependencies = [
  "bytemuck",
  "libm",
  "num-complex",
- "reborrow",
-]
-
-[[package]]
-name = "pulp"
-version = "0.18.9"
-source = "git+https://github.com/kiranshila/pulp#c560691fb349c116beabed3ca4ae4b7511f25601"
-dependencies = [
- "bytemuck",
- "libm",
- "num-complex",
  "pulp-macro",
  "reborrow",
 ]
@@ -1198,7 +1187,8 @@ dependencies = [
 [[package]]
 name = "pulp-macro"
 version = "0.1.1"
-source = "git+https://github.com/kiranshila/pulp#c560691fb349c116beabed3ca4ae4b7511f25601"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d315b3197b780e4873bc0e11251cb56a33f65a6032a3d39b8d1405c255513766"
 dependencies = [
  "proc-macro2",
  "quote",
