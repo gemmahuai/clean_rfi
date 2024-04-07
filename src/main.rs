@@ -1,7 +1,7 @@
 #![feature(portable_simd)]
 
 use clap::{Parser, Subcommand};
-use clean_rfi::io::clean_filterbank;
+use clean_rfi::io::{clean_filterbank, clean_psrdada};
 use color_eyre::eyre::Result;
 
 #[derive(Parser, Debug)]
@@ -41,7 +41,7 @@ fn main() -> Result<()> {
     color_eyre::install()?;
 
     match args.method {
-        Method::Dada { .. } => todo!(),
+        Method::Dada { from, to } => clean_psrdada(from, to)?,
         Method::Filterbank { from, to } => clean_filterbank(&from, &to)?,
     };
 

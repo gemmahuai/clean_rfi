@@ -4,14 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+byte-slice-cast = "1"
 clap = { version = "4", features = ["derive"] }
 color-eyre = "0.6"
 faer = "0.18"
 memmap2 = "0.9"
-nohash-hasher = "0.2.0"
 psrdada = "0.4"
-rayon = "1.10.0"
-roaring = "0.10"
 sigproc_filterbank = "0.4"
 
 [dependencies.pulp]

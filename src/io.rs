@@ -1,15 +1,18 @@
 //! Logic to perform filtering through IO
 
+use crate::algos::clean_block;
+use byte_slice_cast::AsMutSliceOf;
 use color_eyre::eyre::Result;
-use faer::prelude::*;
+use faer::{mat, prelude::*};
 use memmap2::Mmap;
+use psrdada::prelude::*;
 use sigproc_filterbank::{read::ReadFilterbank, write::WriteFilterbank};
 use std::{
     fs::File,
     io::{BufWriter, Write},
 };
 
-use crate::algos::clean_block;
+const CHANNELS: usize = 2048;
 
 //use crate::algos::clean_block;
 
@@ -70,8 +73,57 @@ pub fn clean_filterbank(in_file: &str, out_file: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn clean_psrdada() {
+pub fn clean_psrdada(in_key: i32, out_key: i32) -> Result<()> {
     // Read a block at a time from PSRDADA and write to another PSRDADA buffer
     // Both buffers must exist at runtime, we're not creating them
-    todo!()
+
+    // Connect to the two header/data paired buffers
+    let mut in_client =
+        HduClient::connect(in_key).expect("Could not connect to the input DADA buffer");
+    let mut out_client =
+        HduClient::connect(out_key).expect("Could not connect to the output DADA buffer");
+
+    // Split these into their header/data pairs
+    let (_, mut in_data) = in_client.split();
+    let (_, mut out_data) = out_client.split();
+
+    // Create the readers and writers
+    let mut in_data_rdr = in_data
+        .reader()
+        .expect("Could not lock the input buffer as a reader");
+    let mut out_data_wdr = out_data
+        .writer()
+        .expect("Could not lock the output buffer as a writer");
+
+    // Loop forever on reading from the input, applying the transformation and writing to the output
+    while let Some(mut read_block) = in_data_rdr.next() {
+        // Get the next write block
+        if let Some(mut write_block) = out_data_wdr.next() {
+            // Get the byte ptrs
+            let read_bytes = read_block.block();
+            let write_bytes = write_block.block();
+
+            // Start by just copying the data across
+            write_bytes.clone_from_slice(read_bytes);
+
+            // First reinterpret the byte slice as a float 32 slice
+            let write_floats = write_bytes.as_mut_slice_of()?;
+
+            let samples = write_floats.len() / CHANNELS;
+
+            // Then reinterpret as a matrix
+            let mat: MatMut<'_, f32> =
+                mat::from_column_major_slice_mut(write_floats, CHANNELS, samples);
+
+            // And then do the cleaning
+            clean_block(mat);
+
+            // No need to lock, mark cleared, or anything like that. That's all implicit with RAII.
+        } else {
+            println!("Errored on getting the next write block, perhaps that buffer was destroyed?");
+            break;
+        }
+    }
+
+    Ok(())
 }
