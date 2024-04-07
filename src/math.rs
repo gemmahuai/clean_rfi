@@ -190,6 +190,11 @@ pub fn row_var(mat: MatRef<'_, f32>) -> Row<f32> {
     row_var_with_mean(mat, mean.as_ref())
 }
 
+/// Construct the vandermonde matrix for x values `xs`
+pub fn vander(xs: &[f32], order: usize) -> Mat<f32> {
+    Mat::from_fn(xs.len(), order + 1, |i, j| xs[i].powf(j as f32))
+}
+
 #[cfg(test)]
 pub mod test {
     use super::*;
@@ -305,5 +310,13 @@ pub mod test {
         assert_eq!(var[0], 18.0);
         assert_eq!(var[1], 4.5);
         assert!(var[2].is_nan());
+    }
+
+    #[test]
+    fn test_vander() {
+        let xs = vander([1.0, 2.0, 3.0].as_slice(), 2);
+        assert_eq!(xs.col_as_slice(0), [1.0, 1.0, 1.0].as_slice());
+        assert_eq!(xs.col_as_slice(1), [1.0, 2.0, 3.0].as_slice());
+        assert_eq!(xs.col_as_slice(2), [1.0, 4.0, 9.0].as_slice());
     }
 }

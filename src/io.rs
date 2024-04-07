@@ -9,6 +9,8 @@ use std::{
     io::{BufWriter, Write},
 };
 
+use crate::algos::clean_block;
+
 //use crate::algos::clean_block;
 
 pub fn clean_filterbank(in_file: &str, out_file: &str) -> Result<()> {
@@ -53,10 +55,10 @@ pub fn clean_filterbank(in_file: &str, out_file: &str) -> Result<()> {
 
     // Copy the data into an in-memory buffer TODO: Make this fast and not suck
     // NOTE: Faer is column-major, so time will be in cols and freq in rows such that subsequent freqeuncy channels are memory-contiguous
-    let data = Mat::from_fn(fb_in.nchans(), fb_in.nsamples(), |i, j| fb_in.get(0, j, i));
+    let mut data = Mat::from_fn(fb_in.nchans(), fb_in.nsamples(), |i, j| fb_in.get(0, j, i));
 
     // Clean the data
-    //clean_block(data.as_mut());
+    clean_block(data.as_mut());
 
     // Then write each time series to the file
     for i in 0..data.ncols() {
