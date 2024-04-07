@@ -1,270 +1,309 @@
 use faer::prelude::*;
+use std::simd::prelude::*; // 8 f32s, AVX (not AVX512)
 
-// --------------------------- TO BE INCLUDED IN FAER EVENTUALLY
+// Conventions:
+// indexing is always row,column
+// which will be represented in i,j
+// the length of these is m,n such that 0 <= i < m and 0 <= j < n
+// Faer mats are column-major, so in-order indexing is idx = i + jm
 
-fn col_mean_col_major(mat: MatRef<'_, f32>) -> Col<f32> {
-    struct Impl<'a> {
-        mat: MatRef<'a, f32>,
+// Arrays are masked with NaNs
+
+#[inline(always)]
+fn column_mean_with_counts(mat: MatRef<'_, f32>, mut counts: ColMut<f32>) -> Col<f32> {
+    let m = mat.nrows();
+    let n = mat.ncols();
+
+    let mut mean = Col::<f32>::zeros(m);
+
+    for j in 0..n {
+        zipped!(&mut mean, &mut counts, mat.as_ref().col(j)).for_each(
+            |unzipped!(mut mean, mut counts, data)| {
+                if !(*data).is_nan() {
+                    *mean += *data;
+                    *counts += 1.0;
+                }
+            },
+        );
     }
 
-    impl pulp::WithSimd for Impl<'_> {
-        type Output = Col<f32>;
+    zipped!(&mut mean, counts.as_ref()).for_each(|unzipped!(mut mean, counts)| {
+        *mean /= *counts;
+    });
 
-        #[inline(always)]
-        fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
-            let Self { mat } = self;
-            _ = simd;
-
-            let m = mat.nrows();
-            let n = mat.ncols();
-            let one_n = 1.0 / n as f32;
-
-            let mut mean = Col::<f32>::zeros(m);
-            for j in 0..n {
-                zipped!(&mut mean, mat.col(j)).for_each(|unzipped!(mut mean, mat)| {
-                    *mean += *mat * one_n;
-                });
-            }
-            mean
-        }
-    }
-
-    pulp::Arch::new().dispatch(Impl { mat })
+    mean
 }
 
-fn col_meanvar_col_major(mat: MatRef<'_, f32>) -> (Col<f32>, Col<f32>) {
-    struct Impl<'a> {
-        mat: MatRef<'a, f32>,
-        mean: Col<f32>,
-    }
-
-    impl pulp::WithSimd for Impl<'_> {
-        type Output = (Col<f32>, Col<f32>);
-
-        #[inline(always)]
-        fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
-            let Self { mat, mean } = self;
-            _ = simd;
-            let m = mat.nrows();
-            let n = mat.ncols();
-            let one_n1 = 1.0 / (n - 1) as f32;
-
-            let mut variance: Col<f32> = Col::zeros(m);
-            for i in 0..n {
-                zipped!(&mut variance, &mean, mat.col(i)).for_each(
-                    |unzipped!(mut var, mean, mat)| {
-                        let x = *mat - *mean;
-                        *var += x * x * one_n1;
-                    },
-                );
-            }
-            (mean, variance)
-        }
-    }
-
-    let mean = col_mean_col_major(mat);
-    pulp::Arch::new().dispatch(Impl { mat, mean })
-}
-
-fn col_mean_row_major(mat: MatRef<'_, f32>) -> Col<f32> {
-    struct Impl<'a> {
-        mat: MatRef<'a, f32>,
-    }
-
-    impl pulp::WithSimd for Impl<'_> {
-        type Output = Col<f32>;
-
-        #[inline(always)]
-        fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
-            let Self { mat } = self;
-
-            let m = mat.nrows();
-            let n = mat.ncols();
-            let one_n = 1.0 / n as f32;
-
-            let mut mean = Col::<f32>::zeros(m);
-            for i in 0..m {
-                let mut sum0 = simd.f32s_splat(0.0);
-                let mut sum1 = simd.f32s_splat(0.0);
-                let mut sum2 = simd.f32s_splat(0.0);
-                let mut sum3 = simd.f32s_splat(0.0);
-
-                let row = mat.row(i).try_as_slice().unwrap();
-                let (head, tail) = S::f32s_as_simd(row);
-                let (head4, head1) = pulp::as_arrays::<4, _>(head);
-
-                for &[x0, x1, x2, x3] in head4 {
-                    sum0 = simd.f32s_add(sum0, x0);
-                    sum1 = simd.f32s_add(sum1, x1);
-                    sum2 = simd.f32s_add(sum2, x2);
-                    sum3 = simd.f32s_add(sum3, x3);
-                }
-                for &x0 in head1 {
-                    sum0 = simd.f32s_add(sum0, x0);
-                }
-
-                let sum0 = simd.f32s_add(sum0, sum1);
-                let sum2 = simd.f32s_add(sum2, sum3);
-
-                let sum0 = simd.f32s_add(sum0, sum2);
-
-                let sum = simd.f32s_reduce_sum(sum0) + tail.iter().sum::<f32>();
-
-                mean[i] = sum * one_n;
-            }
-            mean
-        }
-    }
-
-    pulp::Arch::new().dispatch(Impl { mat })
-}
-
-fn col_meanvar_row_major(mat: MatRef<'_, f32>) -> (Col<f32>, Col<f32>) {
-    struct Impl<'a> {
-        mat: MatRef<'a, f32>,
-        mean: Col<f32>,
-    }
-
-    impl pulp::WithSimd for Impl<'_> {
-        type Output = (Col<f32>, Col<f32>);
-
-        #[inline(always)]
-        fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
-            let Self { mat, mean } = self;
-            _ = simd;
-            let m = mat.nrows();
-            let n = mat.ncols();
-            let one_n1 = 1.0 / (n - 1) as f32;
-
-            let mut variance: Col<f32> = Col::zeros(m);
-
-            for i in 0..m {
-                let scalar_mean = mean[i];
-                let mean = simd.f32s_splat(scalar_mean);
-
-                let mut sum0 = simd.f32s_splat(0.0);
-                let mut sum1 = simd.f32s_splat(0.0);
-                let mut sum2 = simd.f32s_splat(0.0);
-                let mut sum3 = simd.f32s_splat(0.0);
-
-                let row = mat.row(i).try_as_slice().unwrap();
-                let (head, tail) = S::f32s_as_simd(row);
-                let (head4, head1) = pulp::as_arrays::<4, _>(head);
-
-                for &[x0, x1, x2, x3] in head4 {
-                    let x0 = simd.f32s_sub(x0, mean);
-                    let x1 = simd.f32s_sub(x1, mean);
-                    let x2 = simd.f32s_sub(x2, mean);
-                    let x3 = simd.f32s_sub(x3, mean);
-
-                    sum0 = simd.f32s_mul_add(x0, x0, sum0);
-                    sum1 = simd.f32s_mul_add(x1, x1, sum1);
-                    sum2 = simd.f32s_mul_add(x2, x2, sum2);
-                    sum3 = simd.f32s_mul_add(x3, x3, sum3);
-                }
-                for &x0 in head1 {
-                    let x0 = simd.f32s_sub(x0, mean);
-
-                    sum0 = simd.f32s_mul_add(x0, x0, sum0);
-                }
-
-                let sum0 = simd.f32s_add(sum0, sum1);
-                let sum2 = simd.f32s_add(sum2, sum3);
-
-                let sum0 = simd.f32s_add(sum0, sum2);
-
-                let sum = simd.f32s_reduce_sum(sum0)
-                    + tail
-                        .iter()
-                        .map(|x| {
-                            let var = x - scalar_mean;
-                            var * var
-                        })
-                        .sum::<f32>();
-
-                variance[i] = sum * one_n1;
-            }
-
-            (mean, variance)
-        }
-    }
-
-    let mean = col_mean_row_major(mat);
-    pulp::Arch::new().dispatch(Impl { mat, mean })
-}
-
+/// Compute the column mean, ignoring masked (NaN) values
 pub fn column_mean(mat: MatRef<'_, f32>) -> Col<f32> {
-    if mat.col_stride() == 1 {
-        col_mean_row_major(mat)
-    } else {
-        col_mean_col_major(mat)
-    }
+    column_mean_with_counts(mat, Col::zeros(mat.nrows()).as_mut())
 }
 
-pub fn column_meanvar(mat: MatRef<'_, f32>) -> (Col<f32>, Col<f32>) {
-    if mat.col_stride() == 1 {
-        col_meanvar_row_major(mat)
-    } else {
-        col_meanvar_col_major(mat)
+/// Compute the column variance, ignoring masked (NaN) values, with a precomputed mean
+#[inline(always)]
+fn column_var_with_mean_counts(
+    mat: MatRef<'_, f32>,
+    mean: ColRef<'_, f32>,
+    mut counts: ColMut<'_, f32>,
+) -> Col<f32> {
+    let m = mat.nrows();
+    let n = mat.ncols();
+
+    let mut var = Col::<f32>::zeros(m);
+
+    for j in 0..n {
+        zipped!(&mut var, &mut counts, mean.as_ref(), mat.as_ref().col(j)).for_each(
+            |unzipped!(mut var, mut counts, mean, mat)| {
+                if !(*mat).is_nan() && !(*mean).is_nan() {
+                    let x = *mat - *mean;
+                    *var += x * x;
+                    *counts += 1.0;
+                }
+            },
+        );
     }
+
+    zipped!(&mut var, counts.as_ref()).for_each(|unzipped!(mut var, counts)| {
+        *var /= if *counts == 0.0 { 0.0 } else { *counts - 1.0 };
+    });
+
+    var
 }
 
+/// Compute the column variance, ignoring masked (NaN) values
+pub fn column_var(mat: MatRef<'_, f32>) -> Col<f32> {
+    let mut counts = Col::zeros(mat.nrows());
+    let mean = column_mean_with_counts(mat, counts.as_mut());
+    counts = Col::zeros(mat.nrows());
+    column_var_with_mean_counts(mat, mean.as_ref(), counts.as_mut())
+}
+
+/// Compute the row mean, ignoring masked (NaN) values
+#[inline(always)]
 pub fn row_mean(mat: MatRef<'_, f32>) -> Row<f32> {
-    column_mean(mat.transpose()).transpose().to_owned()
+    // Create the type for the SIMD
+    const N: usize = 8;
+    type F32s = Simd<f32, N>;
+
+    let _m = mat.nrows();
+    let n = mat.ncols();
+
+    let mut mean = Row::<f32>::zeros(n);
+
+    for j in 0..n {
+        // Get the column (slice of contiguous memory)
+        let col = mat.col(j).try_as_slice().unwrap();
+
+        // SIMD vectors we're summing into and using as "constants"
+        let zeros = F32s::splat(0.0);
+        let ones = F32s::splat(1.0);
+        let mut vsum = F32s::splat(0.0);
+        let mut vcount = F32s::splat(0.0);
+
+        // Operate one SIMD vector-length chunk at a time
+        let mut chunk_iter = col.chunks_exact(N);
+        for chunk in chunk_iter.by_ref() {
+            // Create the SIMD vector from this slice
+            let v = F32s::from_slice(chunk);
+            // Create the NaN mask
+            let m = v.is_nan();
+            // Count the NaNs
+            vcount += m.select(zeros, ones);
+            // Sum the masked non-nan values
+            vsum += m.select(zeros, v);
+        }
+
+        // Sum all the result vector
+        let mut count = vcount.reduce_sum();
+        let mut sum = vsum.reduce_sum();
+
+        // Handle the remaining bits that don't fit in a SIMD vector
+        let tail = chunk_iter.remainder();
+        if !tail.is_empty() {
+            tail.iter().filter(|x| !x.is_nan()).for_each(|x| {
+                sum += x;
+                count += 1.0;
+            })
+        }
+
+        // And assign to the mean
+        mean[j] = sum / count;
+    }
+
+    mean
 }
 
-pub fn row_meanvar(mat: MatRef<'_, f32>) -> (Row<f32>, Row<f32>) {
-    let (mean, var) = column_meanvar(mat.transpose());
-    (mean.transpose().to_owned(), var.transpose().to_owned())
+#[inline(always)]
+fn row_var_with_mean(mat: MatRef<'_, f32>, mean: RowRef<'_, f32>) -> Row<f32> {
+    const N: usize = 8;
+    type F32s = Simd<f32, N>;
+
+    let _m = mat.nrows();
+    let n = mat.ncols();
+
+    let mut var = Row::<f32>::zeros(n);
+
+    for j in 0..n {
+        let col = mat.col(j).try_as_slice().unwrap();
+        let scalar_mean = mean[j];
+
+        let means = F32s::splat(scalar_mean);
+        let zeros = F32s::splat(0.0);
+        let ones = F32s::splat(1.0);
+        let mut vsum = F32s::splat(0.0);
+        let mut vcount = F32s::splat(0.0);
+
+        let mut chunk_iter = col.chunks_exact(N);
+        for chunk in chunk_iter.by_ref() {
+            let v = F32s::from_slice(chunk);
+            let diff = v - means;
+            let diff_squared = diff * diff;
+            let m = diff_squared.is_nan();
+            vcount += m.select(zeros, ones);
+            vsum += m.select(zeros, v);
+        }
+
+        let mut count = vcount.reduce_sum();
+        let mut sum = vsum.reduce_sum();
+
+        let tail = chunk_iter.remainder();
+        if !tail.is_empty() {
+            for x in tail {
+                let v = x - scalar_mean;
+                let v2 = v * v;
+                if !v2.is_nan() {
+                    sum += v2;
+                    count += 1.0;
+                }
+            }
+        }
+
+        var[j] = sum / if count == 0.0 { count } else { count - 1.0 };
+    }
+
+    var
 }
 
-// --------------------------- END
-
-/// Construct the vandermonde matrix for x values `xs`
-pub fn vander(xs: &[f32], order: usize) -> Mat<f32> {
-    Mat::from_fn(xs.len(), order + 1, |i, j| xs[i].powf(j as f32))
+/// Compute the row variance, ignoring masked (NaN) values
+pub fn row_var(mat: MatRef<'_, f32>) -> Row<f32> {
+    let mean = row_mean(mat);
+    row_var_with_mean(mat, mean.as_ref())
 }
 
 #[cfg(test)]
-pub mod tests {
+pub mod test {
     use super::*;
     use faer::mat;
-
-    #[test]
-    fn test_vander() {
-        let xs = vander([1.0, 2.0, 3.0].as_slice(), 2);
-        assert_eq!(xs.col_as_slice(0), [1.0, 1.0, 1.0].as_slice());
-        assert_eq!(xs.col_as_slice(1), [1.0, 2.0, 3.0].as_slice());
-        assert_eq!(xs.col_as_slice(2), [1.0, 4.0, 9.0].as_slice());
-    }
+    use std::f32::NAN;
 
     #[test]
     fn test_col_mean() {
-        let a = mat![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0f32]];
-        let mean = column_mean(a.as_ref());
-        assert_eq!(mean.as_slice(), [2.0, 5.0, 8.0].as_slice());
+        let m = mat![
+            [1.0, 2.0, NAN],
+            [NAN, 5.0, 6.0],
+            [7.0, NAN, 9.0],
+            [NAN, 11.0, NAN]
+        ];
+        let mean = column_mean(m.as_ref());
+        assert_eq!(mean.as_slice(), [1.5, 5.5, 8.0, 11.0].as_slice())
     }
 
     #[test]
     fn test_row_mean() {
-        let a = mat![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0f32]];
-        let mean = row_mean(a.as_ref());
-        assert_eq!(mean.as_slice(), [4.0, 5.0, 6.0].as_slice());
+        let m = mat![
+            [1.0, 2.0, NAN],
+            [NAN, 5.0, 6.0],
+            [7.0, NAN, 9.0],
+            [NAN, 11.0, NAN]
+        ];
+        let mean = row_mean(m.as_ref());
+        assert_eq!(mean.as_slice(), [4.0, 6.0, 7.5].as_slice())
     }
 
     #[test]
-    fn test_col_meanvar() {
-        let a = mat![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0f32]];
-        let (mean, var) = column_meanvar(a.as_ref());
-        assert_eq!(mean.as_slice(), [2.0, 5.0, 8.0].as_slice());
-        assert_eq!(var.as_slice(), [1.0, 1.0, 1.0].as_slice())
+    fn test_col_var() {
+        let m = mat![
+            [1.0, 2.0, NAN],
+            [NAN, 5.0, 6.0],
+            [7.0, NAN, 9.0],
+            [NAN, NAN, NAN]
+        ];
+        let var = column_var(m.as_ref());
+        assert_eq!(var[0], 0.5);
+        assert_eq!(var[1], 0.5);
+        assert_eq!(var[2], 2.0);
+        assert!(var[3].is_nan());
     }
 
     #[test]
-    fn test_row_meanvar() {
-        let a = mat![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0f32]];
-        let (mean, var) = row_meanvar(a.as_ref());
-        assert_eq!(mean.as_slice(), [4.0, 5.0, 6.0].as_slice());
-        assert_eq!(var.as_slice(), [9.0, 9.0, 9.0].as_slice())
+    fn test_col_var_bad_row() {
+        let m = mat![
+            [1.0, 2.0, NAN],
+            [NAN, 5.0, 6.0],
+            [7.0, NAN, 9.0],
+            [NAN, NAN, NAN]
+        ];
+        let var = column_var(m.as_ref());
+        assert_eq!(var[0], 0.5);
+        assert_eq!(var[1], 0.5);
+        assert_eq!(var[2], 2.0);
+        assert!(var[3].is_nan());
+    }
+
+    #[test]
+    fn test_col_var_bad_both() {
+        let m = mat![
+            [1.0, 2.0, NAN],
+            [NAN, 5.0, NAN],
+            [7.0, NAN, NAN],
+            [NAN, NAN, NAN]
+        ];
+        let var = column_var(m.as_ref());
+        assert_eq!(var[0], 0.5);
+        assert!(var[1].is_nan());
+        assert!(var[2].is_nan());
+        assert!(var[3].is_nan());
+    }
+
+    #[test]
+    fn test_row_var() {
+        let m = mat![
+            [1.0, 2.0, NAN],
+            [NAN, 5.0, 6.0],
+            [7.0, NAN, 9.0],
+            [NAN, NAN, NAN]
+        ];
+        let var = row_var(m.as_ref());
+        assert_eq!(var[0], 18.0);
+        assert_eq!(var[1], 4.5);
+        assert_eq!(var[2], 4.5);
+    }
+
+    #[test]
+    fn test_row_var_bad_col() {
+        let m = mat![
+            [1.0, 2.0, NAN],
+            [NAN, 5.0, NAN],
+            [7.0, NAN, NAN],
+            [NAN, 11.0, NAN]
+        ];
+        let var = row_var(m.as_ref());
+        assert_eq!(var[0], 18.0);
+        assert_eq!(var[1], 21.0);
+        assert!(var[2].is_nan());
+    }
+
+    #[test]
+    fn test_row_var_bad_both() {
+        let m = mat![
+            [1.0, 2.0, NAN],
+            [NAN, 5.0, NAN],
+            [7.0, NAN, NAN],
+            [NAN, NAN, NAN]
+        ];
+        let var = row_var(m.as_ref());
+        assert_eq!(var[0], 18.0);
+        assert_eq!(var[1], 4.5);
+        assert!(var[2].is_nan());
     }
 }

@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 use clap::{Parser, Subcommand};
 use clean_rfi::io::clean_filterbank;
 use color_eyre::eyre::Result;

@@ -323,9 +323,12 @@ dependencies = [
  "criterion",
  "faer",
  "memmap2",
+ "nohash-hasher",
  "psrdada",
- "pulp",
+ "pulp 0.18.9 (git+https://github.com/kiranshila/pulp)",
  "rand",
+ "rayon",
+ "roaring",
  "sigproc_filterbank",
 ]
 
@@ -576,7 +579,7 @@ dependencies = [
  "libm",
  "num-complex",
  "num-traits",
- "pulp",
+ "pulp 0.18.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "reborrow",
 ]
 
@@ -643,7 +646,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "paste",
- "pulp",
+ "pulp 0.18.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "raw-cpuid",
  "rayon",
  "seq-macro",
@@ -921,6 +924,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
+
+[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1175,6 +1184,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulp"
+version = "0.18.9"
+source = "git+https://github.com/kiranshila/pulp#c560691fb349c116beabed3ca4ae4b7511f25601"
+dependencies = [
+ "bytemuck",
+ "libm",
+ "num-complex",
+ "pulp-macro",
+ "reborrow",
+]
+
+[[package]]
+name = "pulp-macro"
+version = "0.1.1"
+source = "git+https://github.com/kiranshila/pulp#c560691fb349c116beabed3ca4ae4b7511f25601"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "py_literal"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1299,6 +1330,16 @@ name = "regex-syntax"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adad44e29e4c806119491a7f06f03de4d1af22c3a680dd47f1e6e179439d1f56"
+
+[[package]]
+name = "roaring"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1c77081a55300e016cb86f2864415b7518741879db925b8d488a0ee0d2da6bf"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+]
 
 [[package]]
 name = "rustc-demangle"
