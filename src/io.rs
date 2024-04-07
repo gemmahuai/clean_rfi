@@ -84,16 +84,36 @@ pub fn clean_psrdada(in_key: i32, out_key: i32) -> Result<()> {
         HduClient::connect(out_key).expect("Could not connect to the output DADA buffer");
 
     // Split these into their header/data pairs
-    let (_, mut in_data) = in_client.split();
-    let (_, mut out_data) = out_client.split();
+    let (mut in_header, mut in_data) = in_client.split();
+    let (mut out_header, mut out_data) = out_client.split();
 
-    // Create the readers and writers
+    // HEIMDALL-Specific, pass along the single header that we get from T0 and continue
+    let mut in_header_rdr = in_header
+        .reader()
+        .expect("Could not lock the input header buffer as a reader");
+    let mut out_header_wdr = out_header
+        .writer()
+        .expect("Could not lock the output header buffer as a writer");
+
+    if let Some(mut in_block) = in_header_rdr.next() {
+        if let Some(mut out_block) = out_header_wdr.next() {
+            let in_bytes = in_block.block();
+            let out_bytes = out_block.block();
+            out_bytes.clone_from_slice(in_bytes);
+        } else {
+            panic!("Couldn't get the next header write block")
+        }
+    } else {
+        panic!("Couldn't get the next header read block")
+    }
+
+    // Create the data block readers and writers
     let mut in_data_rdr = in_data
         .reader()
-        .expect("Could not lock the input buffer as a reader");
+        .expect("Could not lock the input data buffer as a reader");
     let mut out_data_wdr = out_data
         .writer()
-        .expect("Could not lock the output buffer as a writer");
+        .expect("Could not lock the output data buffer as a writer");
 
     // Loop forever on reading from the input, applying the transformation and writing to the output
     while let Some(mut read_block) = in_data_rdr.next() {
@@ -108,7 +128,6 @@ pub fn clean_psrdada(in_key: i32, out_key: i32) -> Result<()> {
 
             // First reinterpret the byte slice as a float 32 slice
             let write_floats = write_bytes.as_mut_slice_of()?;
-
             let samples = write_floats.len() / CHANNELS;
 
             // Then reinterpret as a matrix

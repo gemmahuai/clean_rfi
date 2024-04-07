@@ -4,8 +4,8 @@ use faer::prelude::*;
 use faer::stats::StandardMat;
 use rand::prelude::*;
 
-const BENCH_BLOCK_ROWS: usize = 15324; // Same size as the test fil
-const BENCH_BLOCK_COLS: usize = 2048;
+const BENCH_BLOCK_ROWS: usize = 2048;
+const BENCH_BLOCK_COLS: usize = 15324;
 
 pub fn row_mean(c: &mut Criterion) {
     let nm = StandardMat {
