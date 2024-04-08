@@ -143,7 +143,7 @@ pub fn clean_psrdada(in_key: i32, out_key: i32) -> Result<()> {
             // Finally, for feeding heimdall, we want to replace every NaN with the mean
             let mean = simd_mean(column_mean(mat.as_ref()).as_slice());
 
-            for j in 0..CHANNELS {
+            for j in 0..samples {
                 let mut col = mat.as_mut().col_mut(j);
                 zipped!(&mut col).for_each(|unzipped!(mut x)| {
                     if (*x).is_nan() {
