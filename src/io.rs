@@ -1,6 +1,9 @@
 //! Logic to perform filtering through IO
 
-use crate::algos::clean_block;
+use crate::{
+    algos::clean_block,
+    math::{column_mean, simd_mean},
+};
 use byte_slice_cast::AsMutSliceOf;
 use color_eyre::eyre::Result;
 use faer::{mat, prelude::*};
@@ -131,11 +134,23 @@ pub fn clean_psrdada(in_key: i32, out_key: i32) -> Result<()> {
             let samples = write_floats.len() / CHANNELS;
 
             // Then reinterpret as a matrix
-            let mat: MatMut<'_, f32> =
+            let mut mat: MatMut<'_, f32> =
                 mat::from_column_major_slice_mut(write_floats, CHANNELS, samples);
 
             // And then do the cleaning
-            clean_block(mat);
+            clean_block(mat.as_mut());
+
+            // Finally, for feeding heimdall, we want to replace every NaN with the mean
+            let mean = simd_mean(column_mean(mat.as_ref()).as_slice());
+
+            for j in 0..CHANNELS {
+                let mut col = mat.as_mut().col_mut(j);
+                zipped!(&mut col).for_each(|unzipped!(mut x)| {
+                    if (*x).is_nan() {
+                        *x = mean;
+                    }
+                })
+            }
 
             // No need to lock, mark cleared, or anything like that. That's all implicit with RAII.
         } else {
