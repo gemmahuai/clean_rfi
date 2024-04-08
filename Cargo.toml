@@ -8,9 +8,16 @@ byte-slice-cast = "1"
 clap = { version = "4", features = ["derive"] }
 color-eyre = "0.6"
 faer = "0.18"
+faer-ext = { version = "0.1", features = ["ndarray"] }
 memmap2 = "0.9"
 psrdada = "0.4"
 sigproc_filterbank = "0.4"
+pyo3 = { version = "0.21", features = ["extension-module"] }
+numpy = "0.21"
+
+[lib]
+name = "clean_rfi"
+crate-type = ["cdylib", "lib"]
 
 [dependencies.pulp]
 version = "*"        # Use version from faer as the constraint
