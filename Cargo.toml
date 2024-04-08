@@ -8,12 +8,17 @@ byte-slice-cast = "1"
 clap = { version = "4", features = ["derive"] }
 color-eyre = "0.6"
 faer = "0.18"
-faer-ext = { version = "0.1", features = ["ndarray"] }
 memmap2 = "0.9"
 psrdada = "0.4"
 sigproc_filterbank = "0.4"
-pyo3 = { version = "0.21", features = ["extension-module"] }
-numpy = "0.21"
+# Python deps
+faer-ext = { version = "0.1", features = ["ndarray"], optional = true }
+pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
+numpy = { version = "0.21", optional = true }
+
+[features]
+default = []
+python = ["dep:pyo3", "dep:numpy", "dep:faer-ext"]
 
 [lib]
 name = "clean_rfi"

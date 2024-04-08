@@ -15,7 +15,8 @@ build-backend = "maturin"
 
 [tool.maturin]
 profile = "release"
-manifest-path = "Cargo.toml"
-bindings = "pyo3"
+features = ["python"]
+#manifest-path = "Cargo.toml"
+#bindings = "pyo3"
 skip-auditwheel = false
 strip = true
