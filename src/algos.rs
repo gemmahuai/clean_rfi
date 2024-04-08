@@ -216,9 +216,9 @@ pub fn clean_block(mut mat: MatMut<'_, f32>) {
 
     // Twice-iterative variance cut across both axes
     varcut_channels(mat.rb_mut(), 3.);
-    //varcut_time(mat.rb_mut(), 3.);
+    varcut_time(mat.rb_mut(), 5.);
     varcut_channels(mat.rb_mut(), 5.);
-    //varcut_time(mat.rb_mut(), 5.);
+    varcut_time(mat.rb_mut(), 7.);
 
     // Mask out the DM=0 values
     //dm_zero_filter(mat.rb_mut(), 7.0);
