@@ -47,7 +47,7 @@
         [runCiLocally]
         ++ (with pkgs; [
           # Rust stuff, some stuff dev-only
-          (rust-bin.nightly.latest.default.override {
+          (rust-bin.stable.latest.default.override {
             extensions = ["rust-src" "rust-analyzer"];
           })
 
