@@ -3,7 +3,7 @@ use clean_rfi::{
         clean_block, detrend_columns, detrend_rows, normalize_and_trim_bandpass, varcut_channels,
         varcut_time,
     },
-    math::{column_mean, column_var, mask_columns, mask_rows, row_mean, row_var},
+    math::{mask::*, mean::*, var::*},
 };
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use faer::prelude::*;

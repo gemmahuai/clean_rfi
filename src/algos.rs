@@ -1,10 +1,15 @@
-use crate::math::*;
+use crate::math::{
+    mask::{mask_columns, mask_rows},
+    mean::{column_mean, row_mean},
+    median, vander,
+    var::{column_var, row_var},
+};
 use faer::{
     col,
     prelude::*,
     reborrow::{Reborrow, ReborrowMut},
 };
-use nanstats::{NaNMean, NaNVar};
+use nanstats::*;
 use pulp::Simd;
 
 /// Detrend variation across columns

@@ -980,7 +980,7 @@ dependencies = [
 [[package]]
 name = "nanstats"
 version = "0.1.0"
-source = "git+https://github.com/kiranshila/nanstats#e527705e4f9c22a53879446bb339eb08a8caf36a"
+source = "git+https://github.com/kiranshila/nanstats#a8c6d48b605a78f87bf81718339ffbc10622b302"
 dependencies = [
  "pulp",
 ]
