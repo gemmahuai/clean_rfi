@@ -16,7 +16,13 @@ const CHANNELS: usize = 2048;
 
 //use crate::algos::clean_block;
 
-pub fn clean_filterbank(in_file: &str, out_file: &str) -> Result<()> {
+pub fn clean_filterbank(
+    in_file: &str,
+    out_file: &str,
+    first_pass_sigma: f32,
+    second_pass_sigma: f32,
+    detrend_order: usize,
+) -> Result<()> {
     // Open and parse the input
     let fb_in_file = File::open(in_file)?;
     let fb_in_mm = unsafe { Mmap::map(&fb_in_file)? };
@@ -68,14 +74,19 @@ pub fn clean_filterbank(in_file: &str, out_file: &str) -> Result<()> {
         mat::from_column_major_slice(data_slice, fb_in.nchans(), fb_in.nsamples());
 
     // Clone the whole block
-    let mut data = data_in.to_owned();
+    let mut mat = data_in.to_owned();
 
     // Clean the data
-    clean_block(data.as_mut());
+    clean_block(
+        mat.as_mut(),
+        first_pass_sigma,
+        second_pass_sigma,
+        detrend_order,
+    );
 
     // Then write each time series to the file
-    for i in 0..data.ncols() {
-        let packed = fb_out.pack(data.col_as_slice(i));
+    for i in 0..mat.ncols() {
+        let packed = fb_out.pack(mat.col_as_slice(i));
         fb_writer.write_all(&packed)?;
     }
     fb_writer.flush()?;
@@ -83,7 +94,13 @@ pub fn clean_filterbank(in_file: &str, out_file: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn clean_psrdada(in_key: i32, out_key: i32) -> Result<()> {
+pub fn clean_psrdada(
+    in_key: i32,
+    out_key: i32,
+    first_pass_sigma: f32,
+    second_pass_sigma: f32,
+    detrend_order: usize,
+) -> Result<()> {
     // Read a block at a time from PSRDADA and write to another PSRDADA buffer
     // Both buffers must exist at runtime, we're not creating them
 
@@ -145,7 +162,12 @@ pub fn clean_psrdada(in_key: i32, out_key: i32) -> Result<()> {
                 mat::from_column_major_slice_mut(write_floats, CHANNELS, samples);
 
             // And then do the cleaning
-            clean_block(mat.as_mut());
+            clean_block(
+                mat.as_mut(),
+                first_pass_sigma,
+                second_pass_sigma,
+                detrend_order,
+            );
 
             // Finally, for feeding heimdall, we want to replace every NaN with zero
             for j in 0..samples {

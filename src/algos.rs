@@ -204,7 +204,12 @@ pub fn normalize_and_trim_bandpass_with_simd<S: Simd>(
 
 /// Clean a block of time/freq data, used in every IO operation
 /// This is the top-level cleaning function
-pub fn clean_block(mut mat: MatMut<'_, f32>) {
+pub fn clean_block(
+    mut mat: MatMut<'_, f32>,
+    first_pass_sigma: f32,
+    second_pass_sigma: f32,
+    detrend_order: usize,
+) {
     // Start with a dumb mask of the top and bottom frequency channels
     // Those are full of nonsense all the time
     let mut bad_channels = vec![];
@@ -216,14 +221,14 @@ pub fn clean_block(mut mat: MatMut<'_, f32>) {
     normalize_and_trim_bandpass(mat.rb_mut(), 0.001);
 
     // Twice-iterative variance cut across both axes
-    varcut_channels(mat.rb_mut(), 2.);
-    varcut_time(mat.rb_mut(), 2.);
-    varcut_channels(mat.rb_mut(), 3.);
-    varcut_time(mat.rb_mut(), 3.);
+    varcut_channels(mat.rb_mut(), first_pass_sigma);
+    varcut_time(mat.rb_mut(), first_pass_sigma);
+    varcut_channels(mat.rb_mut(), second_pass_sigma);
+    varcut_time(mat.rb_mut(), second_pass_sigma);
 
     // Remove variation across frequency and time
-    detrend_rows(mat.rb_mut(), 4);
-    detrend_columns(mat, 4);
+    detrend_rows(mat.rb_mut(), detrend_order);
+    detrend_columns(mat, detrend_order);
 }
 
 #[cfg(test)]

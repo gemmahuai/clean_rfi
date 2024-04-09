@@ -126,7 +126,7 @@ pub fn bench_clean_block(c: &mut Criterion) {
     group.bench_function("clean_block", |b| {
         b.iter_batched_ref(
             || nm.sample(&mut rand::thread_rng()),
-            |data| clean_block(data.as_mut()),
+            |data| clean_block(data.as_mut(), 3., 5., 4),
             BATCH_SIZE,
         )
     });
