@@ -1,5 +1,5 @@
 use faer::prelude::*;
-use std::simd::prelude::*; // 8 f32s, AVX (not AVX512)
+use pulp::Simd;
 
 // Conventions:
 // indexing is always row,column
@@ -9,17 +9,18 @@ use std::simd::prelude::*; // 8 f32s, AVX (not AVX512)
 
 // Arrays are masked with NaNs and unmasked with 0
 
-// Create the type for the SIMD
-const N: usize = 8;
-type F32s = Simd<f32, N>;
-
+#[pulp::with_simd(column_mean_with_counts = pulp::Arch::new())]
 #[inline(always)]
-fn column_mean_with_counts(mat: MatRef<'_, f32>, mut counts: ColMut<f32>) -> Col<f32> {
+pub fn column_mean_with_counts_simd<S: Simd>(
+    simd: S,
+    mat: MatRef<'_, f32>,
+    mut counts: ColMut<'_, f32>,
+) -> Col<f32> {
+    _ = simd;
     let m = mat.nrows();
     let n = mat.ncols();
 
     let mut mean = Col::<f32>::zeros(m);
-
     for j in 0..n {
         zipped!(&mut mean, &mut counts, mat.as_ref().col(j)).for_each(
             |unzipped!(mut mean, mut counts, data)| {
@@ -44,12 +45,16 @@ pub fn column_mean(mat: MatRef<'_, f32>) -> Col<f32> {
 }
 
 /// Compute the column variance, ignoring masked (NaN) values, with a precomputed mean
+
+#[pulp::with_simd(column_var_with_mean_counts = pulp::Arch::new())]
 #[inline(always)]
-fn column_var_with_mean_counts(
+pub fn column_var_with_mean_counts_simd<S: Simd>(
+    simd: S,
     mat: MatRef<'_, f32>,
     mean: ColRef<'_, f32>,
     mut counts: ColMut<'_, f32>,
 ) -> Col<f32> {
+    _ = simd;
     let m = mat.nrows();
     let n = mat.ncols();
 
@@ -82,34 +87,38 @@ pub fn column_var(mat: MatRef<'_, f32>) -> Col<f32> {
     column_var_with_mean_counts(mat, mean.as_ref(), counts.as_mut())
 }
 
+#[pulp::with_simd(simd_mean = pulp::Arch::new())]
 #[inline(always)]
-/// SIMD-accelerated, single dimension, NaN-ignoring mean
-pub fn simd_mean(xs: &[f32]) -> f32 {
-    // SIMD vectors we're summing into and using as "constants"
-    let zeros = F32s::splat(0.0);
-    let ones = F32s::splat(1.0);
-    let mut vsum = F32s::splat(0.0);
-    let mut vcount = F32s::splat(0.0);
+pub fn simd_mean_with_simd<S: Simd>(simd: S, xs: &[f32]) -> f32 {
+    // Setup the simd vectors
+    let zeros = simd.f32s_splat(0.0);
+    let ones = simd.f32s_splat(1.0);
+    let mut vsum = simd.f32s_splat(0.0);
+    let mut vcount = simd.f32s_splat(0.0);
+
+    // Create locals that we will overwrite in each loop
+    let mut mask;
+    let mut masked;
 
     // Operate one SIMD vector-length chunk at a time
-    let mut chunk_iter = xs.chunks_exact(N);
-    for chunk in chunk_iter.by_ref() {
-        // Create the SIMD vector from this slice
-        let v = F32s::from_slice(chunk);
-        // Create the NaN mask
-        let m = v.is_nan();
-        // Count the NaNs
-        vcount += m.select(zeros, ones);
-        // Sum the masked non-nan values
-        vsum += m.select(zeros, v);
+    let (chunks, tail) = S::f32s_as_simd(xs);
+    for &chunk in chunks {
+        // Create the NaN maks
+        // This mask has zeros where there are NaNs
+        mask = simd.f32s_equal(chunk, chunk);
+        masked = simd.m32s_select_f32s(mask, ones, zeros);
+        // Accumulate the ones for the count (number of non-nan values)
+        vcount = simd.f32s_add(masked, vcount);
+        // FMA the NAN mask with the chunk into the accumulator
+        // vsum = masked * chunk + vsum
+        vsum = simd.f32s_mul_add(masked, chunk, vsum);
     }
 
     // Sum all the result vector
-    let mut count = vcount.reduce_sum();
-    let mut sum = vsum.reduce_sum();
+    let mut count = simd.f32s_reduce_sum(vcount);
+    let mut sum = simd.f32s_reduce_sum(vsum);
 
     // Handle the remaining bits that don't fit in a SIMD vector
-    let tail = chunk_iter.remainder();
     if !tail.is_empty() {
         tail.iter().filter(|x| !x.is_nan()).for_each(|x| {
             sum += x;
@@ -135,29 +144,41 @@ pub fn row_mean(mat: MatRef<'_, f32>) -> Row<f32> {
     mean
 }
 
+#[pulp::with_simd(simd_var_with_mean = pulp::Arch::new())]
 #[inline(always)]
-/// SIMD-accelerated, single dimension, NaN-ignoring variance with precomputed mean
-pub fn simd_var_with_mean(xs: &[f32], scalar_mean: f32) -> f32 {
-    let means = F32s::splat(scalar_mean);
-    let zeros = F32s::splat(0.0);
-    let ones = F32s::splat(1.0);
-    let mut vsum = F32s::splat(0.0);
-    let mut vcount = F32s::splat(0.0);
+pub fn simd_var_with_mean_with_simd<S: Simd>(simd: S, xs: &[f32], scalar_mean: f32) -> f32 {
+    // Setup the simd vectors
+    let means = simd.f32s_splat(scalar_mean);
+    let zeros = simd.f32s_splat(0.0);
+    let ones = simd.f32s_splat(1.0);
+    let mut vsum = simd.f32s_splat(0.0);
+    let mut vcount = simd.f32s_splat(0.0);
 
-    let mut chunk_iter = xs.chunks_exact(N);
-    for chunk in chunk_iter.by_ref() {
-        let v = F32s::from_slice(chunk);
-        let diff = v - means;
-        let diff_squared = diff * diff;
-        let m = diff_squared.is_nan();
-        vcount += m.select(zeros, ones);
-        vsum += m.select(zeros, diff_squared);
+    // Create locals that we will overwrite in each loop
+    let mut mask;
+    let mut masked;
+    let mut intermediate;
+
+    // Operate one SIMD vector-length chunk at a time
+    let (chunks, tail) = S::f32s_as_simd(xs);
+    for &chunk in chunks {
+        // Create the NaN maks
+        // This mask has zeros where there are NaNs
+        mask = simd.f32s_equal(chunk, chunk);
+        masked = simd.m32s_select_f32s(mask, ones, zeros);
+        // Accumulate the ones for the count (number of non-nan values)
+        vcount = simd.f32s_add(masked, vcount);
+        // Compute the squared difference, and FMA into the sum
+        intermediate = simd.f32s_sub(chunk, means);
+        intermediate = simd.f32s_mul(intermediate, intermediate);
+        vsum = simd.f32s_mul_add(masked, intermediate, vsum);
     }
 
-    let mut count = vcount.reduce_sum();
-    let mut sum = vsum.reduce_sum();
+    // Sum all the result vector
+    let mut count = simd.f32s_reduce_sum(vcount);
+    let mut sum = simd.f32s_reduce_sum(vsum);
 
-    let tail = chunk_iter.remainder();
+    // Handle the remaining bits that don't fit in a SIMD vector
     if !tail.is_empty() {
         for x in tail {
             let v = x - scalar_mean;
@@ -169,6 +190,7 @@ pub fn simd_var_with_mean(xs: &[f32], scalar_mean: f32) -> f32 {
         }
     }
 
+    // And compute the var
     sum / if count == 0.0 { count } else { count - 1.0 }
 }
 
@@ -203,7 +225,10 @@ pub fn vander(xs: &[f32], order: usize) -> Mat<f32> {
 }
 
 /// Given a matrix and a single row mask (NaN values and zeros), apply the mask to every row in the matrix
-pub fn mask_columns(mut mat: MatMut<'_, f32>, mask: RowRef<'_, f32>) {
+#[pulp::with_simd(mask_columns = pulp::Arch::new())]
+#[inline(always)]
+pub fn mask_columns_with_simd<S: Simd>(simd: S, mut mat: MatMut<'_, f32>, mask: RowRef<'_, f32>) {
+    _ = simd;
     let n = mat.ncols();
     for j in 0..n {
         let mask_val = mask[j];
@@ -214,7 +239,10 @@ pub fn mask_columns(mut mat: MatMut<'_, f32>, mask: RowRef<'_, f32>) {
 }
 
 /// Given a matrix and a single column mask (NaN values and zeros), apply the mask to every column in the matrix
-pub fn mask_rows(mut mat: MatMut<'_, f32>, mask: ColRef<'_, f32>) {
+#[pulp::with_simd(mask_rows = pulp::Arch::new())]
+#[inline(always)]
+pub fn mask_rows_with_simd<S: Simd>(simd: S, mut mat: MatMut<'_, f32>, mask: ColRef<'_, f32>) {
+    _ = simd;
     let n = mat.ncols();
     for j in 0..n {
         zipped!(mat.as_mut().col_mut(j), &mask).for_each(|unzipped!(mut mat, mask)| {
@@ -231,53 +259,12 @@ pub fn median(xs: &[f32]) -> f32 {
     *non_nans[mid]
 }
 
-#[inline(always)]
-/// SIMD-accelerated, single dimension, NaN-ignoring mean absolute deviation with precomputed mean
-pub fn simd_mad_with_mean(xs: &[f32], scalar_mean: f32) -> f32 {
-    let means = F32s::splat(scalar_mean);
-    let zeros = F32s::splat(0.0);
-    let ones = F32s::splat(1.0);
-    let mut vsum = F32s::splat(0.0);
-    let mut vcount = F32s::splat(0.0);
-
-    let mut chunk_iter = xs.chunks_exact(N);
-    for chunk in chunk_iter.by_ref() {
-        let v = F32s::from_slice(chunk);
-        let diff = v - means;
-        let diff_squared = diff * diff;
-        let m = diff_squared.is_nan();
-        vcount += m.select(zeros, ones);
-        vsum += m.select(zeros, diff_squared);
-    }
-
-    let mut count = vcount.reduce_sum();
-    let mut sum = vsum.reduce_sum();
-
-    let tail = chunk_iter.remainder();
-    if !tail.is_empty() {
-        for x in tail {
-            let v = (x - scalar_mean).abs();
-            if !v.is_nan() {
-                sum += v;
-                count += 1.0;
-            }
-        }
-    }
-
-    sum / count
-}
-
-/// SIMD-accelerated, single dimension, NaN-ignoring mean absolute deviation
-pub fn simd_mad(xs: &[f32]) -> f32 {
-    let scalar_mean = simd_mean(xs);
-    simd_mad_with_mean(xs, scalar_mean)
-}
-
 #[cfg(test)]
 pub mod test {
     use super::*;
     use faer::{col, mat, row};
-    use std::f32::NAN;
+
+    const NAN: f32 = f32::NAN;
 
     #[test]
     fn test_col_mean() {
@@ -443,12 +430,5 @@ pub mod test {
         let xs = vec![5., 1., NAN, 4., 2., 3.];
         let med = median(xs.as_slice());
         assert_eq!(med, 3.0);
-    }
-
-    #[test]
-    fn test_mad() {
-        let xs = vec![5., 1., NAN, 4., 2., 3.];
-        let med = simd_mad(xs.as_slice());
-        assert_eq!(med, 1.2);
     }
 }

@@ -21,11 +21,11 @@ default = []
 python = ["dep:pyo3", "dep:numpy", "dep:faer-ext"]
 
 [lib]
-name = "clean_rfi"
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies.pulp]
-version = "*"        # Use version from faer as the constraint
+# Use version from faer as the constraint
+version = "*"
 features = ["macro"]
 
 [profile.dev.package.faer]
@@ -33,8 +33,7 @@ opt-level = 3
 
 [profile.release]
 codegen-units = 1
-lto = "fat"
-panic = "abort"
+strip = true
 
 [[bench]]
 name = "benchmarks"

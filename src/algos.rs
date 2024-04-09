@@ -1,11 +1,10 @@
-use std::f32::NAN;
-
 use crate::math::*;
 use faer::{
     col,
     prelude::*,
     reborrow::{Reborrow, ReborrowMut},
 };
+use pulp::Simd;
 
 /// Detrend variation across columns
 pub fn detrend_columns(mut mat: MatMut<'_, f32>, order: usize) {
@@ -24,6 +23,12 @@ pub fn detrend_columns(mut mat: MatMut<'_, f32>, order: usize) {
             xs.push(j as f32);
         }
     }
+
+    // If it was all NaNs, nothing we can do...
+    if ys.is_empty() {
+        return;
+    }
+
     // Put these ys into a column as that's what lstsq needs
     let ys: ColRef<'_, f32> = col::from_slice(&ys[..]);
 
@@ -62,6 +67,12 @@ pub fn detrend_rows(mut mat: MatMut<'_, f32>, order: usize) {
             xs.push(i as f32);
         }
     }
+
+    // If it was all NaNs, nothing we can do...
+    if ys.is_empty() {
+        return;
+    }
+
     // Put these ys into a column as that's what lstsq needs
     let ys: ColRef<'_, f32> = col::from_slice(&ys[..]);
 
@@ -85,21 +96,21 @@ pub fn detrend_rows(mut mat: MatMut<'_, f32>, order: usize) {
 /// Mask off channels just given their channel number
 pub fn channel_mask(mat: MatMut<'_, f32>, channels: &[usize]) {
     // Channels are rows here (column-major)
-    let mask = Col::<f32>::from_fn(
-        mat.nrows(),
-        |i| {
-            if channels.contains(&i) {
-                NAN
-            } else {
-                0.0
-            }
-        },
-    );
+    let mask = Col::<f32>::from_fn(mat.nrows(), |i| {
+        if channels.contains(&i) {
+            f32::NAN
+        } else {
+            0.0
+        }
+    });
     mask_rows(mat, mask.as_ref());
 }
 
 /// Mask off time samples (columns) whose mean standard dev (in frequency) is above some threshold
-pub fn varcut_time(mat: MatMut<'_, f32>, sigma_threshold: f32) {
+#[pulp::with_simd(varcut_time = pulp::Arch::new())]
+#[inline(always)]
+pub fn varcut_time_with_simd<S: Simd>(simd: S, mat: MatMut<'_, f32>, sigma_threshold: f32) {
+    _ = simd;
     let n = mat.ncols();
 
     // Compute the standard deviations
@@ -116,7 +127,7 @@ pub fn varcut_time(mat: MatMut<'_, f32>, sigma_threshold: f32) {
     let mut mask = Row::<f32>::zeros(n);
     zipped!(&mut mask, &sigma).for_each(|unzipped!(mut mask, sigma)| {
         if *sigma > mu_sigma + sigma_threshold * sigma_sigma {
-            *mask = NAN;
+            *mask = f32::NAN;
         }
     });
 
@@ -125,7 +136,10 @@ pub fn varcut_time(mat: MatMut<'_, f32>, sigma_threshold: f32) {
 }
 
 /// Mask off channels (rows) whose mean standard dev (in time) is above some threshold
-pub fn varcut_channels(mat: MatMut<'_, f32>, threshold: f32) {
+#[pulp::with_simd(varcut_channels = pulp::Arch::new())]
+#[inline(always)]
+pub fn varcut_channels_with_simd<S: Simd>(simd: S, mat: MatMut<'_, f32>, threshold: f32) {
+    _ = simd;
     let m = mat.nrows();
 
     // Compute the standard deviations
@@ -142,7 +156,7 @@ pub fn varcut_channels(mat: MatMut<'_, f32>, threshold: f32) {
     let mut mask = Col::<f32>::zeros(m);
     zipped!(&mut mask, &sigma).for_each(|unzipped!(mut mask, sigma)| {
         if *sigma > mu_sigma + threshold * sigma_sigma {
-            *mask = NAN;
+            *mask = f32::NAN;
         }
     });
 
@@ -151,7 +165,14 @@ pub fn varcut_channels(mat: MatMut<'_, f32>, threshold: f32) {
 }
 
 /// Normalize bandpass and remove dead channels (channels with low power)
-pub fn normalize_and_trim_bandpass(mut mat: MatMut<'_, f32>, threshold: f32) {
+#[pulp::with_simd(normalize_and_trim_bandpass = pulp::Arch::new())]
+#[inline(always)]
+pub fn normalize_and_trim_bandpass_with_simd<S: Simd>(
+    simd: S,
+    mut mat: MatMut<'_, f32>,
+    threshold: f32,
+) {
+    _ = simd;
     let n = mat.ncols();
     let m = mat.nrows();
     // Compute bandpaass
@@ -162,7 +183,7 @@ pub fn normalize_and_trim_bandpass(mut mat: MatMut<'_, f32>, threshold: f32) {
     let mut mask = Col::<f32>::zeros(m);
     zipped!(&mut mask, &t_sys).for_each(|unzipped!(mut mask, t_sys)| {
         if *t_sys < threshold * t_sys_median {
-            *mask = NAN;
+            *mask = f32::NAN;
         }
     });
     // Apply mask
@@ -173,32 +194,6 @@ pub fn normalize_and_trim_bandpass(mut mat: MatMut<'_, f32>, threshold: f32) {
             *mat /= *t_sys;
         });
     }
-}
-
-/// Mask time samples that contain "DM=0" outliers
-pub fn dm_zero_filter(mut mat: MatMut<'_, f32>, threshold: f32) {
-    let n = mat.ncols();
-    // Find the average time series (sum all frequencies)
-    let mut dm_zero = row_mean(mat.as_ref());
-    let dm_zero_median = median(dm_zero.as_slice());
-
-    // Subtract out the median in place
-    zipped!(&mut dm_zero).for_each(|unzipped!(mut x)| *x -= dm_zero_median);
-
-    // Compute the mean absolute deviation
-    let dm_zero_mad = simd_mad(dm_zero.as_slice());
-    let std_dev = 1.4826 * dm_zero_mad;
-
-    // Find the outliers
-    let mut mask = Row::<f32>::zeros(n);
-    zipped!(&mut mask, dm_zero).for_each(|unzipped!(mut mask, dm_zero)| {
-        if (*dm_zero).abs() > threshold * std_dev {
-            *mask = NAN;
-        }
-    });
-
-    // Apply mask
-    mask_columns(mat.rb_mut(), mask.as_ref());
 }
 
 /// Clean a block of time/freq data, used in every IO operation
@@ -216,12 +211,9 @@ pub fn clean_block(mut mat: MatMut<'_, f32>) {
 
     // Twice-iterative variance cut across both axes
     varcut_channels(mat.rb_mut(), 3.);
-    varcut_time(mat.rb_mut(), 5.);
+    varcut_time(mat.rb_mut(), 3.);
     varcut_channels(mat.rb_mut(), 5.);
     varcut_time(mat.rb_mut(), 7.);
-
-    // Mask out the DM=0 values
-    //dm_zero_filter(mat.rb_mut(), 7.0);
 
     // Remove variation across frequency and time
     detrend_rows(mat.rb_mut(), 4);
