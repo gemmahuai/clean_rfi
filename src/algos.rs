@@ -4,6 +4,7 @@ use faer::{
     prelude::*,
     reborrow::{Reborrow, ReborrowMut},
 };
+use nanstats::{NaNMean, NaNVar};
 use pulp::Simd;
 
 /// Detrend variation across columns
@@ -118,10 +119,10 @@ pub fn varcut_time_with_simd<S: Simd>(simd: S, mat: MatMut<'_, f32>, sigma_thres
     zipped!(&mut sigma).for_each(|unzipped!(mut x)| *x = (*x).sqrt());
 
     // Compute the mean of the standard deviations
-    let mu_sigma = simd_mean(sigma.as_slice());
+    let mu_sigma = sigma.as_slice().nanmean();
 
     // Compute the standard deviation of the standard deviations
-    let sigma_sigma = simd_var_with_mean(sigma.as_slice(), mu_sigma).sqrt();
+    let sigma_sigma = sigma.as_slice().nanvar_with_mean(mu_sigma).sqrt();
 
     // Compute the mask where sigma > mu_sigma + sigma_threshold * sigma_sigma
     let mut mask = Row::<f32>::zeros(n);
@@ -147,10 +148,10 @@ pub fn varcut_channels_with_simd<S: Simd>(simd: S, mat: MatMut<'_, f32>, thresho
     zipped!(&mut sigma).for_each(|unzipped!(mut x)| *x = (*x).sqrt());
 
     // Compute the mean of the standard deviations
-    let mu_sigma = simd_mean(sigma.as_slice());
+    let mu_sigma = sigma.as_slice().nanmean();
 
     // Compute the standard deviation of the standard deviations
-    let sigma_sigma = simd_var_with_mean(sigma.as_slice(), mu_sigma).sqrt();
+    let sigma_sigma = sigma.as_slice().nanvar_with_mean(mu_sigma).sqrt();
 
     // Compute the mask where sigma > mu_sigma + sigma_threshold * sigma_sigma
     let mut mask = Col::<f32>::zeros(m);

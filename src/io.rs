@@ -1,9 +1,6 @@
 //! Logic to perform filtering through IO
 
-use crate::{
-    algos::clean_block,
-    math::{column_mean, simd_mean},
-};
+use crate::algos::clean_block;
 use byte_slice_cast::AsMutSliceOf;
 use color_eyre::eyre::Result;
 use faer::{mat, prelude::*};
@@ -140,14 +137,12 @@ pub fn clean_psrdada(in_key: i32, out_key: i32) -> Result<()> {
             // And then do the cleaning
             clean_block(mat.as_mut());
 
-            // Finally, for feeding heimdall, we want to replace every NaN with the mean
-            let mean = simd_mean(column_mean(mat.as_ref()).as_slice());
-
+            // Finally, for feeding heimdall, we want to replace every NaN with zero
             for j in 0..samples {
                 let mut col = mat.as_mut().col_mut(j);
                 zipped!(&mut col).for_each(|unzipped!(mut x)| {
                     if (*x).is_nan() {
-                        *x = mean;
+                        *x = 0.;
                     }
                 })
             }
