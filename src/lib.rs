@@ -16,7 +16,7 @@ pub mod python {
     fn clean_rfi<'py>(_py: Python<'py>, m: &Bound<'py, PyModule>) -> PyResult<()> {
         fn clean_block(mat: ArrayViewMut2<'_, f32>) {
             // Transpose so the Mat is column-major when we hand it to faer
-            let faer_block = mat.into_faer();
+            let faer_block = mat.into_faer().transpose_mut();
             algos::clean_block(faer_block);
         }
 

@@ -52,10 +52,10 @@
           })
 
           # Python wrapper
-          # (pkgs.python3.withPackages (python-pkgs: [
-          #   python-pkgs.numpy
-          #   python-pkgs.matplotlib
-          # ]))
+          (pkgs.python3.withPackages (python-pkgs: [
+            python-pkgs.numpy
+            python-pkgs.matplotlib
+          ]))
 
           # The C-libraries needed to statically link
           psrdada.packages.${system}.default
