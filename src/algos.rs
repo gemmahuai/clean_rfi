@@ -211,10 +211,10 @@ pub fn clean_block(mut mat: MatMut<'_, f32>) {
     normalize_and_trim_bandpass(mat.rb_mut(), 0.001);
 
     // Twice-iterative variance cut across both axes
+    varcut_channels(mat.rb_mut(), 2.);
+    varcut_time(mat.rb_mut(), 2.);
     varcut_channels(mat.rb_mut(), 3.);
     varcut_time(mat.rb_mut(), 3.);
-    varcut_channels(mat.rb_mut(), 5.);
-    varcut_time(mat.rb_mut(), 7.);
 
     // Remove variation across frequency and time
     detrend_rows(mat.rb_mut(), 4);

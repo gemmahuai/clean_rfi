@@ -1,7 +1,7 @@
 //! Logic to perform filtering through IO
 
 use crate::algos::clean_block;
-use byte_slice_cast::AsMutSliceOf;
+use byte_slice_cast::{AsMutSliceOf, AsSliceOf};
 use color_eyre::eyre::Result;
 use faer::{mat, prelude::*};
 use memmap2::Mmap;
@@ -58,7 +58,17 @@ pub fn clean_filterbank(in_file: &str, out_file: &str) -> Result<()> {
 
     // Copy the data into an in-memory buffer TODO: Make this fast and not suck
     // NOTE: Faer is column-major, so time will be in cols and freq in rows such that subsequent freqeuncy channels are memory-contiguous
-    let mut data = Mat::from_fn(fb_in.nchans(), fb_in.nsamples(), |i, j| fb_in.get(0, j, i));
+    // Dumb cast the byte pointer
+    let data_slice = fb_in
+        .raw_data
+        .as_slice_of()
+        .expect("Couldn't reinterpret filterbank slice as f32");
+
+    let data_in: MatRef<'_, f32> =
+        mat::from_column_major_slice(data_slice, fb_in.nchans(), fb_in.nsamples());
+
+    // Clone the whole block
+    let mut data = data_in.to_owned();
 
     // Clean the data
     clean_block(data.as_mut());

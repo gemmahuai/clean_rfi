@@ -1,6 +1,8 @@
 pub mod algos;
-pub mod io;
 pub mod math;
+
+#[cfg(feature = "cli")]
+pub mod io;
 
 #[cfg(feature = "python")]
 pub mod python {
