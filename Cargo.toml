@@ -21,7 +21,7 @@ pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
 numpy = { version = "0.21", optional = true }
 
 [features]
-default = []
+default = ["cli"]
 nightly = ["faer/nightly", "nanstats/nightly"]
 cli = [
     "dep:psrdada",

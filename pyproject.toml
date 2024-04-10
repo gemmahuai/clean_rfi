@@ -15,5 +15,6 @@ build-backend = "maturin"
 
 [tool.maturin]
 profile = "release"
+no-default-features = true
 features = ["python"]
 skip-auditwheel = false
