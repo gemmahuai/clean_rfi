@@ -980,7 +980,7 @@ dependencies = [
 [[package]]
 name = "nanstats"
 version = "0.1.0"
-source = "git+https://github.com/kiranshila/nanstats#a8c6d48b605a78f87bf81718339ffbc10622b302"
+source = "git+https://github.com/kiranshila/nanstats#fb13cc5cf16dafe63ea53effaf83cfd0169a9d32"
 dependencies = [
  "pulp",
 ]
@@ -1386,9 +1386,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.35"
+version = "1.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "291ec9ab5efd934aaf503a6466c5d5251535d108ee747472c3977cc5acc868ef"
+checksum = "0fa76aaf39101c457836aec0ce2316dbdc3ab723cdda1c6bd4e6ad4208acaca7"
 dependencies = [
  "proc-macro2",
 ]
@@ -1806,9 +1806,9 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "ux"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cb3ff47e36907a6267572c1e398ff32ef78ac5131de8aa272e53846592c207e"
+checksum = "3b59fc5417e036e53226bbebd90196825d358624fd5577432c4e486c95b1b096"
 
 [[package]]
 name = "valuable"
