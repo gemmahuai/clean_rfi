@@ -154,6 +154,7 @@ pub fn clean_psrdada(
             write_bytes.clone_from_slice(read_bytes);
 
             // First reinterpret the byte slice as a float 32 slice
+            // (assuming it was written on a machine with the same endianness)
             let write_floats = write_bytes.as_mut_slice_of()?;
             let samples = write_floats.len() / CHANNELS;
 
