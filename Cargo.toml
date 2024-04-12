@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-faer = "0.18"
+faer = { git = "https://github.com/sarah-ek/faer-rs" }
 nanstats = { git = "https://github.com/kiranshila/nanstats" }
 
 # CLI deps
@@ -57,6 +57,6 @@ name = "benchmarks"
 harness = false
 
 [dev-dependencies]
-faer = { version = "0.18", features = ["rand"] }
+faer = { git = "https://github.com/sarah-ek/faer-rs", features = ["rand"] }
 criterion = "0.4"
 rand = "0.8"

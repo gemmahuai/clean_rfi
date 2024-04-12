@@ -5,7 +5,6 @@ use crate::math::{
     var::{column_var, row_var},
 };
 use faer::{
-    col,
     prelude::*,
     reborrow::{Reborrow, ReborrowMut},
 };

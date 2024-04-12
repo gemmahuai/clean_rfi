@@ -6,8 +6,8 @@ use clean_rfi::{
     math::{mask::*, mean::*, var::*},
 };
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use faer::prelude::*;
 use faer::stats::StandardMat;
+use faer::{prelude::*, stats::NanHandling};
 use rand::prelude::*;
 
 const BENCH_BLOCK_ROWS: usize = 2048;
@@ -38,7 +38,26 @@ macro_rules! bench_mat_fns {
     };
 }
 
-bench_mat_fns!(row_mean, column_mean, row_var, column_var);
+pub fn faer_row_mean(mat: MatRef<'_, f32>) -> Row<f32> {
+    let mut mean = Row::zeros(mat.ncols());
+    faer::stats::row_mean(mean.as_mut(), mat, NanHandling::Ignore);
+    mean
+}
+
+pub fn faer_col_mean(mat: MatRef<'_, f32>) -> Col<f32> {
+    let mut mean = Col::zeros(mat.nrows());
+    faer::stats::col_mean(mean.as_mut(), mat, NanHandling::Ignore);
+    mean
+}
+
+bench_mat_fns!(
+    row_mean,
+    column_mean,
+    row_var,
+    column_var,
+    faer_row_mean,
+    faer_col_mean
+);
 
 pub fn bench_mask(c: &mut Criterion) {
     let nm = StandardMat {

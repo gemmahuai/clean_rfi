@@ -3,7 +3,7 @@
 use crate::algos::clean_block;
 use byte_slice_cast::{AsMutSliceOf, AsSliceOf};
 use color_eyre::eyre::Result;
-use faer::{mat, prelude::*};
+use faer::prelude::*;
 use memmap2::Mmap;
 use psrdada::prelude::*;
 use sigproc_filterbank::{read::ReadFilterbank, write::WriteFilterbank};
