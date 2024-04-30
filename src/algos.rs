@@ -208,6 +208,7 @@ pub fn clean_block(
     first_pass_sigma: f32,
     second_pass_sigma: f32,
     detrend_order: usize,
+    include_detrending: bool, // New boolean parameter
 ) {
     // Start with a dumb mask of the top and bottom frequency channels
     // Those are full of nonsense all the time
@@ -225,9 +226,11 @@ pub fn clean_block(
     varcut_channels(mat.rb_mut(), second_pass_sigma);
     varcut_time(mat.rb_mut(), second_pass_sigma);
 
-    // Remove variation across frequency and time
-    detrend_rows(mat.rb_mut(), detrend_order);
-    detrend_columns(mat, detrend_order);
+    // Conditionally remove variation across frequency and time
+    if include_detrending {
+        detrend_rows(mat.rb_mut(), detrend_order);
+        detrend_columns(mat, detrend_order);
+    }
 }
 
 #[cfg(test)]

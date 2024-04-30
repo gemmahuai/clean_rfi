@@ -82,6 +82,7 @@ pub fn clean_filterbank(
         first_pass_sigma,
         second_pass_sigma,
         detrend_order,
+        include_detrending,
     );
 
     // Then write each time series to the file
@@ -168,6 +169,7 @@ pub fn clean_psrdada(
                 first_pass_sigma,
                 second_pass_sigma,
                 detrend_order,
+                include_detrending,
             );
 
             // Finally, for feeding heimdall, we want to replace every NaN with zero

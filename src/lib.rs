@@ -17,6 +17,7 @@ pub mod python {
         first_pass_sigma: f32,
         second_pass_sigma: f32,
         detrend_order: usize,
+        include_detrending: bool,
     ) {
         // Transpose so the Mat is column-major when we hand it to faer
         let faer_block = mat.into_faer().transpose_mut();
@@ -25,6 +26,7 @@ pub mod python {
             first_pass_sigma,
             second_pass_sigma,
             detrend_order,
+            include_detrending,
         );
     }
 
@@ -35,9 +37,10 @@ pub mod python {
         first_pass_sigma: f32,
         second_pass_sigma: f32,
         detrend_order: usize,
+        include_detrending: bool,
     ) {
         let mat = unsafe { mat.as_array_mut() };
-        clean_block(mat, first_pass_sigma, second_pass_sigma, detrend_order);
+        clean_block(mat, first_pass_sigma, second_pass_sigma, detrend_order, include_detrending);
     }
 
     #[pymodule]
