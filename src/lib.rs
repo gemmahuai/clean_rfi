@@ -31,7 +31,7 @@ pub mod python {
     }
 
     #[pyfunction]
-    #[pyo3(name = "clean_block", signature = (mat, first_pass_sigma=3.0, second_pass_sigma=5.0, detrend_order=4))]
+    #[pyo3(name = "clean_block", signature = (mat, first_pass_sigma=3.0, second_pass_sigma=5.0, detrend_order=4, include_detrending=True))]
     fn clean_block_py(
         mat: &Bound<'_, PyArray2<f32>>,
         first_pass_sigma: f32,
